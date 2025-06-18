@@ -1,27 +1,52 @@
-from llama_cpp import Llama
+from langchain_community.chat_models import ChatLlamaCpp
+from langchain.prompts import MessagesPlaceholder, ChatPromptTemplate
+from langchain_core.runnables import RunnableWithMessageHistory
+from langchain_core.chat_history import InMemoryChatMessageHistory
 
-llm = Llama(
-    model_path=r"models\BgGPT-Gemma-2-2B-IT-v1.0.Q5_K_M.gguf", 
-    n_ctx=2048,
-    n_threads=6,
-    n_gpu_layers=-1,
-    chat_format="gemma",
-    verbose=False
-)
 
-# prompt = "Напиши кратка история за робот, който мечтае да стане художник."
+class ChatBot:
+    def __init__(self, system_prompt: str):
+        self.system_prompt = system_prompt
+        self.llm = ChatLlamaCpp(
+            model_path=r"models\gemma-3-4b-it-Q4_K_M.gguf",
+            model_kwargs={
+                "n_ctx": 8192,
+                "n_threads": 6,
+                "n_gpu_layers": -1,
+                "n_batch": 64,
+                "temperature": 0.7,
+                # "chat_format": "gemma",
+                "chat_format": "llama-3",
+            },
+            verbose=False,
+        )
 
-def ask_bot(prompt):
-    # response = llm(prompt=prompt, max_tokens=512)
-    # return response['choices'][0]['text'].strip()
-    response = llm.create_chat_completion(
-        messages=[
-            {"role": "system", "content": "Ти си мил асистент, който говори на български."},
-            {"role": "user", "content": prompt}
-        ],
-        max_tokens=512,
-        # temperature=0.7
-    )
-    return response['choices'][0]['message']["content"].strip()
+        self.prompt = (
+            ChatPromptTemplate.from_messages([
+                ("user", "{system_prompt}"),
+                MessagesPlaceholder("history"),
+                ("user", "{input}")
+            ])
+            .partial(system_prompt=self.system_prompt)
+        )
 
-# print(ask_bot(prompt))
+        self._history = InMemoryChatMessageHistory()
+
+        base_chain = self.prompt | self.llm
+
+        self.chain = RunnableWithMessageHistory(
+            base_chain,
+            lambda _: self._history,
+            input_messages_key="input",
+            history_messages_key="history",
+        )
+
+        print(f"✅ Създаден бот с промпт: {self.system_prompt}")
+
+    def ask(self, user_input: str) -> str:
+        response = self.chain.invoke(
+            {"input": user_input},
+            config={"configurable": {"session_id": "ram"}},
+        )
+        return response.content.strip()
+
