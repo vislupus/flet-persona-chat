@@ -8,15 +8,14 @@ class ChatBot:
     def __init__(self, system_prompt: str):
         self.system_prompt = system_prompt
         self.llm = ChatLlamaCpp(
-            model_path=r"models\gemma-3-4b-it-Q4_K_M.gguf",
+            model_path=r"models\gemma-3-1B-it-QAT-Q4_0.gguf",
             model_kwargs={
                 "n_ctx": 8192,
                 "n_threads": 6,
                 "n_gpu_layers": -1,
                 "n_batch": 64,
                 "temperature": 0.7,
-                # "chat_format": "gemma",
-                "chat_format": "llama-3",
+                "chat_format": "gemma",
             },
             verbose=False,
         )
