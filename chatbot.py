@@ -16,6 +16,7 @@ class ChatBot:
                 "n_batch": 64,
                 "temperature": 0.7,
                 "chat_format": "gemma",
+                "max_tokens": 1000,
             },
             verbose=False,
         )
