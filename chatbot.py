@@ -9,14 +9,14 @@ class ChatBot:
         self.system_prompt = system_prompt
         self.llm = ChatLlamaCpp(
             model_path=r"models\gemma-3-1B-it-QAT-Q4_0.gguf",
+            max_tokens=2048,
             model_kwargs={
-                "n_ctx": 8192,
+                "n_ctx": 32768,
                 "n_threads": 6,
                 "n_gpu_layers": -1,
                 "n_batch": 64,
                 "temperature": 0.7,
                 "chat_format": "gemma",
-                "max_tokens": 1000,
             },
             verbose=False,
         )
