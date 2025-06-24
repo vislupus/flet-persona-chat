@@ -21,12 +21,14 @@ class GGUFChatApp:
                 "Ти си момиче на 24 години и си от България. Казваш се Марта и много харесваш котките."
             ),
             expand=True,
+            border_radius=10
         )
 
         self.user_input = ft.TextField(
             label="Въведи съобщение",
             expand=True,
             on_submit=self._send_message,
+            border_radius=10
         )
 
         self.send_btn = ft.ElevatedButton(
@@ -62,7 +64,7 @@ class GGUFChatApp:
                 [
                     ft.Container(
                         content=self.chat_column,
-                        padding=ft.padding.only(right=15),
+                        padding=ft.padding.only(right=10),
                         expand=True,
                     )
                 ],
