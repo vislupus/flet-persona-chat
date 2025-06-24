@@ -8,7 +8,7 @@ class GGUFChatApp:
     BUBBLE_RATIO = 0.7
     LONG_MSG_THRESHOLD = 150
 
-    def __init__(self, page: ft.Page):
+    def __init__(self, page: ft.Page, mount_to: ft.Control | None = None):
         self.page = page
 
         self._bot = {"instance": None}
@@ -82,24 +82,31 @@ class GGUFChatApp:
             height=80,
         )
 
-        self.page.add(
-            ft.Column(
-                [
-                    self.header_container,
-                    ft.Divider(height=1),
-                    self.chat_container,
-                    ft.Divider(height=1),
-                    self.input_container,
-                ],
-                expand=True,
-                spacing=0,
-            )
+        self._root = ft.Column(
+            [
+                self.header_container,
+                ft.Divider(height=1),
+                self.chat_container,
+                ft.Divider(height=1),
+                self.input_container,
+            ],
+            expand=True,
+            spacing=0,
         )
 
+        if mount_to is not None:
+            mount_to.content = self._root
+
         self._on_resize(self.page)
-        self.page.on_resized = self._on_resize
+
+    @property
+    def view(self):
+        return self._root
 
     def _on_resize(self, e):
+        if not self._root.page:
+            return
+        
         self._resize_chat_container(e)
         self._update_bubble_widths()
         self._scroll_to_bottom() 
