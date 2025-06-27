@@ -8,55 +8,41 @@ class GGUFChatApp:
     BUBBLE_RATIO = 0.7
     LONG_MSG_THRESHOLD = 150
 
-    def __init__(self, page: ft.Page, mount_to: ft.Control | None = None):
+    def __init__(self, page: ft.Page, persona: dict):
         self.page = page
-
+        self.current_persona = persona
         self._bot = {"instance": None}
 
-        self.system_input = ft.TextField(
-            label="System Prompt",
-            multiline=True,
-            value=(
-                "Ти си мил асистент, който винаги отговаря на български език."
-                "Ти си момиче на 24 години и си от България. Казваш се Марта и много харесваш котките."
+        self.persona_avatar = ft.CircleAvatar(
+            content=ft.Image(src=self.current_persona.get("image_path"), error_content=ft.Icon(ft.Icons.PERSON))
+        )
+        self.persona_name = ft.Text(self.current_persona.get("name", "Unknown"), size=18, weight=ft.FontWeight.BOLD)
+        
+        self.header_container = ft.Container(
+            content=ft.ListTile(
+                leading=self.persona_avatar,
+                title=self.persona_name,
+                subtitle=ft.Text("LLM Chat", size=12)
             ),
-            expand=True,
-            border_radius=10
+            padding=ft.padding.only(left=10, right=10, top=5, bottom=5),
+            bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
+            height=70
         )
 
         self.user_input = ft.TextField(
-            label="Въведи съобщение",
-            expand=True,
-            on_submit=self._send_message,
-            border_radius=10
+            label="Enter your message", expand=True,
+            on_submit=self._send_message, border_radius=10
         )
 
-        self.send_btn = ft.ElevatedButton(
-            "Изпрати",
-            on_click=self._send_message,
-            style=ft.ButtonStyle(
-                padding=10,
-                shape=ft.ContinuousRectangleBorder(radius=10),
-            ),
+        self.send_btn = ft.IconButton(
+            icon=ft.Icons.SEND_ROUNDED, tooltip="Send Message",
+            on_click=self._send_message
         )
 
         self.chat_column = ft.Column(
-            expand=True, 
-            spacing=10, 
+            expand=True, spacing=10, 
             scroll=ft.ScrollMode.ALWAYS,
             auto_scroll=True,
-        )
-
-        self.header_container = ft.Container(
-            content=ft.Column(
-                [
-                    ft.Text("GGUF Чат Бот", size=24, weight="bold"),
-                    self.system_input,
-                ]
-            ),
-            padding=10,
-            bgcolor=ft.Colors.GREY_50,
-            height=115,
         )
 
         self.chat_container = ft.Container(
@@ -78,7 +64,8 @@ class GGUFChatApp:
         self.input_container = ft.Container(
             content=ft.Row([self.user_input, self.send_btn]),
             padding=10,
-            bgcolor=ft.Colors.GREY_50,
+            # bgcolor=ft.Colors.GREY_50,
+            bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
             height=80,
         )
 
@@ -94,64 +81,67 @@ class GGUFChatApp:
             spacing=0,
         )
 
-        if mount_to is not None:
-            mount_to.content = self._root
-
-        self._on_resize(self.page)
-
     @property
     def view(self):
         return self._root
+    
+    def start_new_chat(self, persona: dict):
+        self.current_persona = persona
+        self._bot["instance"] = None
+        
+        self.persona_avatar.content = ft.Image(src=self.current_persona.get("image_path"), error_content=ft.Icon(ft.Icons.PERSON))
+        self.persona_name.value = self.current_persona.get("name", "Unknown")
+        self.chat_column.controls.clear()
 
-    def _on_resize(self, e):
+
+    def _on_resize(self, e=None):
         if not self._root.page:
             return
+
+        page_height = self.page.height
+        page_width = self.page.width
         
-        self._resize_chat_container(e)
-        self._update_bubble_widths()
-        self._scroll_to_bottom() 
+        self.chat_container.height = page_height - (self.header_container.height + self.input_container.height + 40)
 
-    def _resize_chat_container(self, e):
-        self.chat_container.height = (
-            e.height - (self.header_container.height + self.input_container.height)
-        )
-        self.chat_container.update()
-
-    def _update_bubble_widths(self):
-        max_width = self.page.width * self.BUBBLE_RATIO
+        max_width = page_width * self.BUBBLE_RATIO
+        
         for row in self.chat_column.controls:
-            for ctrl in row.controls:
-                if isinstance(ctrl, ft.Container) and isinstance(ctrl.content, ft.Markdown):
-                    text_len = len(ctrl.content.value or "")
-                    ctrl.width = max_width if text_len > self.LONG_MSG_THRESHOLD else None
-        self.chat_column.update()
+            wrapper = row.controls[0]
+            if row.alignment == ft.MainAxisAlignment.START:
+                wrapper = row.controls[1]
+
+            if isinstance(wrapper, ft.Container):
+                wrapper.width = max_width
+
+        self.page.update()
+        
 
     def _send_message(self, e):
         question = self.user_input.value.strip()
-        system_prompt = self.system_input.value.strip()
-        if not question or not system_prompt:
+        if not question or not self.current_persona:
             return
 
         if self._bot["instance"] is None:
-            self._bot["instance"] = ChatBot(system_prompt=system_prompt)
+            prompt = self.current_persona.get("prompt", "You are a helpful assistant.")
+            self._bot["instance"] = ChatBot(system_prompt=prompt)
 
 
         self._add_user_bubble(question)
-        self._scroll_to_bottom() 
         self.user_input.disabled = True
         self.send_btn.disabled = True
         self.page.update()
+        self._scroll_to_bottom() 
 
         start_time = time()
         answer = self._bot["instance"].ask(question)
         elapsed = time() - start_time
 
         self._add_bot_bubble(answer, elapsed)
-        self._scroll_to_bottom() 
         self.user_input.value = ""
         self.user_input.disabled = False
         self.send_btn.disabled = False
         self.page.update()
+        self._scroll_to_bottom() 
         self.user_input.focus()
 
 
@@ -159,61 +149,66 @@ class GGUFChatApp:
         self.page.update()
         self.chat_column.scroll_to(offset=-1, duration=300)
 
-    def _bubble_width(self, text: str) -> float | None:
-        return (
-            self.page.width * self.BUBBLE_RATIO
-            if len(text) > self.LONG_MSG_THRESHOLD
-            else None
-        )
 
     def _add_user_bubble(self, text: str):
+        bubble = ft.Container(
+            content=ft.Markdown(text, selectable=True, extension_set="git-hub-flavored", code_theme="atom-one-dark"),
+            padding=10,
+            # bgcolor=ft.Colors.BLUE_100,
+            bgcolor=ft.Colors.PRIMARY_CONTAINER,
+            border_radius=10,
+            border=ft.border.all(0.3, ft.Colors.OUTLINE),
+        )
+
+        wrapper = ft.Container(
+            content=bubble,
+            width=self.page.width * self.BUBBLE_RATIO,
+            alignment=ft.alignment.center_right,
+            margin=ft.margin.only(right=20),
+        )
+
         self.chat_column.controls.append(
-            ft.Row(
-                [
-                    ft.Container(
-                        content=ft.Markdown(text, selectable=True,),
-                        padding=10,
-                        bgcolor=ft.Colors.BLUE_100,
-                        border_radius=10,
-                        alignment=ft.alignment.center_right,
-                        width=self._bubble_width(text),
-                        border=ft.border.all(0.3, ft.Colors.OUTLINE),
-                        margin=ft.margin.only(right=20),
-                    )
-                ],
-                alignment=ft.MainAxisAlignment.END,
-            )
+            ft.Row([wrapper], alignment=ft.MainAxisAlignment.END)
         )
 
     def _add_bot_bubble(self, answer: str, elapsed: float):
+        bubble = ft.Container(
+            content=ft.Markdown(
+                f"{answer}\n\n*Response time: {elapsed:.2f}s*", 
+                selectable=True, 
+                extension_set="git-hub-flavored", 
+                code_theme="atom-one-dark"
+            ),
+            padding=10,
+            bgcolor=ft.Colors.with_opacity(0.8, ft.Colors.GREY_200),
+            border_radius=10,
+            border=ft.border.all(0.3, ft.Colors.OUTLINE),
+        )
+
+        wrapper = ft.Container(
+            content=bubble,
+            width=self.page.width * self.BUBBLE_RATIO,
+            alignment=ft.alignment.center_left,
+        )
+        
         self.chat_column.controls.append(
             ft.Row(
                 [
                     ft.Container(
                         content=ft.Image(
-                            src=r"assets\ComfyUI_00347_.png",
-                            fit=ft.ImageFit.COVER,
+                            src=self.current_persona.get("image_path"), 
+                            fit=ft.ImageFit.COVER, 
+                            error_content=ft.Icon(ft.Icons.PERSON)
                         ),
-                        width=30,
-                        height=30,
-                        border_radius=15,
+                        width=40, 
+                        height=40, 
+                        border_radius=20, 
                         clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
                     ),
-                    ft.Container(
-                        content=ft.Markdown(
-                            f"{answer}\n\n_⏱ Отне: {elapsed:.2f} сек._",
-                            selectable=True,
-                        ),
-                        padding=10,
-                        bgcolor=ft.Colors.GREY_200,
-                        border_radius=10,
-                        alignment=ft.alignment.center_left,
-                        width=self._bubble_width(answer),
-                        border=ft.border.all(0.3, ft.Colors.OUTLINE),
-                    ),
-                ],
-                alignment=ft.MainAxisAlignment.START,
-                vertical_alignment=ft.CrossAxisAlignment.START,
-                spacing=10,
+                    wrapper,
+                ], 
+                alignment=ft.MainAxisAlignment.START, 
+                vertical_alignment=ft.CrossAxisAlignment.START, 
+                spacing=10
             )
         )
