@@ -1,6 +1,8 @@
 import flet as ft
 from gguf_chat_ui import GGUFChatApp
 from persona_selector_ui import PersonaSelectorComponent, PersonaManager
+from chats_view_ui import ChatsViewComponent
+from chatbot import ChatBot
 
 def main(page: ft.Page):
     page.title = "GGUF ChatBot"
@@ -9,11 +11,31 @@ def main(page: ft.Page):
 
     persona_selector_component = [None]
     chat_app_component = [None]
-    persona_to_load_in_chat = [None] 
+    chats_view_component = [None]
+    persona_to_load_in_chat = [None]
+    chat_to_load = [None]
     menu_expanded = [False]
 
     content_area = ft.Container(expand=True)
     persona_manager = PersonaManager()
+
+    def get_chat_app_component():
+        # Lazy initialization
+        if chat_app_component[0] is None:
+             # This is a bit complex, we will address it by simplifying the chat app creation
+             pass
+        return chat_app_component[0]
+
+    def on_chat_selected(chat: dict):
+        """Called when a user clicks a saved chat."""
+        # Store the chat data that needs to be loaded
+        chat_to_load[0] = chat
+        # Ensure we are not trying to load a new persona
+        persona_to_load_in_chat[0] = None
+        
+        # Navigate to the chat room
+        navigation_rail.selected_index = 2
+        update_main_view()
 
     def update_main_view():
         index = navigation_rail.selected_index
@@ -28,35 +50,62 @@ def main(page: ft.Page):
             persona_selector_component[0].update_grid()
 
         elif index == 2: # Chat room
-            persona = persona_to_load_in_chat[0]
-            persona_to_load_in_chat[0] = None
-
-            if chat_app_component[0] is not None and persona:
-                chat_app_component[0].start_new_chat(persona)
-
-            elif chat_app_component[0] is None:
-                if not persona:
-                    all_personas = persona_manager.load_personas()
-                    persona = all_personas[0] if all_personas else None
-                
-                if persona:
-                    chat_app_component[0] = GGUFChatApp(page, persona=persona)
-                else:
-                    chat_app_component[0] = ft.Column([
-                        ft.Icon(ft.Icons.PERSON_SEARCH, size=50, color=ft.Colors.OUTLINE),
-                        ft.Text("No personas found.", size=16),
-                        ft.Text("Go to 'Bots' to create one.", color=ft.Colors.OUTLINE)
-                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10)
+             # Get the states
+            persona_to_load = persona_to_load_in_chat[0]
+            saved_chat_to_load = chat_to_load[0]
             
-            content_area.content = chat_app_component[0].view if isinstance(chat_app_component[0], GGUFChatApp) else chat_app_component[0]
+            # Reset states after reading them
+            persona_to_load_in_chat[0] = None
+            chat_to_load[0] = None
 
-            if isinstance(chat_app_component[0], GGUFChatApp):
+            # Determine the persona for the chat session
+            persona_for_session = None
+            if saved_chat_to_load:
+                # If loading a saved chat, find its persona
+                all_personas = {p['id']: p for p in persona_manager.load_personas()}
+                persona_for_session = all_personas.get(saved_chat_to_load['persona_id'])
+            elif persona_to_load:
+                # If starting a new chat with a selected persona
+                persona_for_session = persona_to_load
+            elif chat_app_component[0] is None:
+                # If opening the chat tab for the first time, get the default persona
+                all_personas = persona_manager.load_personas()
+                persona_for_session = all_personas[0] if all_personas else None
+
+            # If we have a persona, we can proceed
+            if persona_for_session:
+                # If chat component doesn't exist, create it
+                if chat_app_component[0] is None:
+                    chat_app_component[0] = GGUFChatApp(page, persona=persona_for_session)
+                
+                # If we are loading a new persona, start a new chat
+                if persona_to_load:
+                    chat_app_component[0].start_new_chat(persona_to_load)
+                
+                # If we are loading a saved chat, load its history
+                elif saved_chat_to_load:
+                    # First ensure the correct persona is set
+                    chat_app_component[0].start_new_chat(persona_for_session) 
+                    # Then load the messages
+                    chat_app_component[0].load_chat_history(saved_chat_to_load['messages'])
+
+            # Set the content area
+            if chat_app_component[0]:
+                content_area.content = chat_app_component[0].view
                 chat_app_component[0]._on_resize()
+            else: # No personas exist at all
+                content_area.content = ft.Column([ft.Icon(ft.icons.PERSON_SEARCH, size=50), ft.Text("No personas found.")])
 
         elif index == 3:
             content_area.content = ft.Text("Memories", size=20)
         elif index == 4:
-            content_area.content = ft.Text("Chats", size=20)
+            # If component doesn't exist, create it.
+            if chats_view_component[0] is None:
+                chats_view_component[0] = ChatsViewComponent(page, on_chat_select=on_chat_selected)
+            
+            # Set the content and tell the component to refresh its data
+            content_area.content = chats_view_component[0].view
+            chats_view_component[0].update_view()
         elif index == 5:
             content_area.content = ft.Text("Settings", size=20)
         
@@ -64,6 +113,7 @@ def main(page: ft.Page):
 
     def on_persona_selected(persona: dict):
         persona_to_load_in_chat[0] = persona
+        chat_to_load[0] = None
         navigation_rail.selected_index = 2
         update_main_view()
 
