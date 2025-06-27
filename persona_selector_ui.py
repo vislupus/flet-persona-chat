@@ -286,9 +286,7 @@ class PersonaSelectorComponent:
         name = self.add_name_field.value.strip()
         prompt = self.add_prompt_field.value.strip()
         if not name or not prompt or not self._add_temp_image_path:
-            self.page.snack_bar = ft.SnackBar(
-                ft.Text("Please fill all fields and select an image."), open=True
-            )
+            print("Validation failed: Please fill all fields and select an image.")
             self.page.update()
             return
 
