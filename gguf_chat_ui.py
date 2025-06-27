@@ -97,24 +97,28 @@ class GGUFChatApp:
         return self._root
     
     def _save_chat_click(self, e):
-        print("Save Chat clicked")
-        # In the next step, we will add:
-        # self.history_manager.save_chat(self.current_persona['id'], self.current_chat_messages)
-        self.page.snack_bar = ft.SnackBar(ft.Text("Chat saved (functionality coming soon)!"), open=True)
-        self.page.update()
+        if not self.current_chat_messages:
+            print("Cannot save an empty chat!")
+            return
+
+        try:
+            self.history_manager.save_chat(
+                persona_id=self.current_persona['id'], 
+                messages=self.current_chat_messages
+            )
+            print("Chat saved successfully!")
+        except Exception as ex:
+            print(f"Error saving chat: {ex}")
+
 
     def _save_memory_click(self, e):
-        print("Save Memory clicked")
-        self.page.snack_bar = ft.SnackBar(ft.Text("Save Memory (functionality coming soon)!"), open=True)
-        self.page.update()
+        print("Save Memory clicked (functionality coming soon)!")
 
     def _new_chat_click(self, e):
         print("New Chat clicked")
-        # Clear the screen and the in-memory history
         self.chat_column.controls.clear()
         self.current_chat_messages.clear()
-        self._bot["instance"] = None # Reset the bot to clear its internal history
-        self.page.snack_bar = ft.SnackBar(ft.Text("New chat started."), open=True)
+        self._bot["instance"] = None
         self.page.update()
 
     
@@ -125,7 +129,26 @@ class GGUFChatApp:
         self.persona_avatar.content = ft.Image(src=self.current_persona.get("image_path"), error_content=ft.Icon(ft.Icons.PERSON))
         self.persona_name.value = self.current_persona.get("name", "Unknown")
         self.chat_column.controls.clear()
+        self.current_chat_messages.clear()
 
+    def load_chat_history(self, messages: list):
+        """Loads a list of messages and displays them in the chat window."""
+        # First, ensure the view is clean
+        self.chat_column.controls.clear()
+        
+        # Set the current message history
+        self.current_chat_messages = messages
+        
+        # Re-create the bubbles on the screen
+        for message in messages:
+            if message.get("role") == "user":
+                self._add_user_bubble(message.get("content"), record_message=False)
+            elif message.get("role") == "bot":
+                self._add_bot_bubble(message.get("content"), elapsed=0, record_message=False)
+        
+        # Reset the bot instance so it can pick up the new history context on the next message
+        self._bot["instance"] = None
+        
 
     def _on_resize(self, e=None):
         if not self._root.page:
@@ -179,12 +202,12 @@ class GGUFChatApp:
 
 
     def _scroll_to_bottom(self):
-        self.page.update()
         self.chat_column.scroll_to(offset=-1, duration=300)
 
 
-    def _add_user_bubble(self, text: str):
-        self.current_chat_messages.append({"role": "user", "content": text})
+    def _add_user_bubble(self, text: str, record_message: bool = True):
+        if record_message:
+            self.current_chat_messages.append({"role": "user", "content": text})
 
         bubble = ft.Container(
             content=ft.Markdown(text, selectable=True, extension_set="git-hub-flavored", code_theme="atom-one-dark"),
@@ -205,12 +228,17 @@ class GGUFChatApp:
             ft.Row([wrapper], alignment=ft.MainAxisAlignment.END)
         )
 
-    def _add_bot_bubble(self, answer: str, elapsed: float):
-        self.current_chat_messages.append({"role": "bot", "content": answer})
+    def _add_bot_bubble(self, answer: str, elapsed: float, record_message: bool = True):
+        if record_message:
+            self.current_chat_messages.append({"role": "bot", "content": answer})
+
+        content = f"{answer}"
+        if elapsed > 0:
+            content = f"{answer}\n\n*Response time: {elapsed:.2f} s*"
 
         bubble = ft.Container(
             content=ft.Markdown(
-                f"{answer}\n\n*Response time: {elapsed:.2f}s*", 
+                content, 
                 selectable=True, 
                 extension_set="git-hub-flavored", 
                 code_theme="atom-one-dark"
