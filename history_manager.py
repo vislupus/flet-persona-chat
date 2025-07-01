@@ -43,9 +43,21 @@ class HistoryManager:
         self._write_json(self.CHATS_FILE, chats)
         print(f"Chat {new_chat['chat_id']} saved.")
 
-    # --- Memory methods will be added in a later step ---
-    def save_memory(self, persona_id: str, summary: str):
-        pass
+    def save_memory(self, persona_id: str, chat_id: str, summary: str):
+        memories = self.load_memories()
+        
+        new_memory = {
+            "memory_id": uuid.uuid4().hex,
+            "persona_id": persona_id,
+            "chat_id": chat_id,
+            "summary": summary,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        memories.append(new_memory)
+        self._write_json(self.MEMORIES_FILE, memories)
+        print(f"Memory {new_memory['memory_id']} saved.")
 
     def load_memories(self) -> list:
-        pass
+        with open(self.MEMORIES_FILE, "r", encoding="utf8") as f:
+            return json.load(f)
