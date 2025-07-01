@@ -1,3 +1,4 @@
+import threading
 from time import time
 import flet as ft
 from chatbot import ChatBot
@@ -14,6 +15,7 @@ class GGUFChatApp:
         self._bot = {"instance": None}
         self.history_manager = HistoryManager()
         self.current_chat_messages = []
+        self.current_chat_id = None
 
         self.persona_avatar = ft.CircleAvatar(
             content=ft.Image(src=self.current_persona.get("image_path"), error_content=ft.Icon(ft.Icons.PERSON))
@@ -96,59 +98,72 @@ class GGUFChatApp:
     def view(self):
         return self._root
     
+    def _show_info_dialog(self, title: str, content):
+        content_control = content if isinstance(content, ft.Control) else ft.Text(content)
+        
+        dlg = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(title),
+            content=content_control,
+            actions=[ft.TextButton("OK", on_click=lambda e: setattr(dlg, 'open', False) or self.page.update())],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+        self.page.overlay.append(dlg)
+        dlg.open = True
+        self.page.update()
+    
     def _save_chat_click(self, e):
         if not self.current_chat_messages:
-            print("Cannot save an empty chat!")
+            self._show_info_dialog("Cannot save an empty chat!")
             return
 
         try:
-            self.history_manager.save_chat(
+            new_id = self.history_manager.save_chat(
                 persona_id=self.current_persona['id'], 
                 messages=self.current_chat_messages
             )
-            print("Chat saved successfully!")
+            self.current_chat_id = new_id
+            self._show_info_dialog("Success", "Chat saved successfully!")
         except Exception as ex:
-            print(f"Error saving chat: {ex}")
+            self._show_info_dialog("Error", f"Could not save chat: {ex}")
 
 
     def _save_memory_click(self, e):
-        """Summarizes the current conversation and saves it as a memory."""
-        if not self.current_chat_messages:
-            # We can't summarize an empty chat
-            print("Cannot create a memory from an empty chat.")
+        if not self.current_chat_messages: 
             return
-
-        # Show a loading indicator in the UI
-        self.page.dialog = ft.AlertDialog(
+        
+        loading_dialog = ft.AlertDialog(
             modal=True,
             title=ft.Text("Creating Memory..."),
-            content=ft.Row([ft.ProgressRing(), ft.Text("The AI is summarizing the conversation.")], spacing=20),
+            content=ft.Row([ft.ProgressRing(), ft.Text("The AI is summarizing...")], spacing=20),
         )
-        self.page.dialog.open = True
+
+        def do_summarize_and_save():
+            """This function will run in a separate thread."""
+            try:
+                if self._bot["instance"] is None:
+                    self._bot["instance"] = ChatBot(system_prompt=self.current_persona.get("prompt", "..."))
+                
+                summary = self._bot["instance"].summarize(self.current_chat_messages)
+                self.history_manager.save_memory(self.current_persona['id'], self.current_chat_id, summary)
+                
+                summary_control = ft.Container(
+                    content=ft.Markdown(f"*{summary}*", selectable=True, extension_set="git-hub-flavored"),
+                )
+                self._show_info_dialog("Memory Saved Successfully", summary_control)
+
+            except Exception as ex:
+                self._show_info_dialog("Error", f"Could not create memory: {ex}")
+            finally:
+                loading_dialog.open = False
+                self.page.update()
+
+        self.page.overlay.append(loading_dialog)
+        loading_dialog.open = True
         self.page.update()
         
-        try:
-            # Ensure we have a bot instance to do the summarization
-            if self._bot["instance"] is None:
-                self._bot["instance"] = ChatBot(system_prompt=self.current_persona.get("prompt", "You are a helpful assistant."))
-            
-            # Get the summary from the bot
-            summary = self._bot["instance"].summarize(self.current_chat_messages)
-            
-            # Save the memory using the manager
-            self.history_manager.save_memory(
-                persona_id=self.current_persona['id'],
-                chat_id="temp_chat", # In a real app, you might link this to a saved chat_id
-                summary=summary
-            )
-            print(f"Memory saved: {summary}")
-
-        except Exception as ex:
-            print(f"Error creating memory: {ex}")
-        finally:
-            # Always close the loading dialog
-            self.page.dialog.open = False
-            self.page.update()
+        thread = threading.Thread(target=do_summarize_and_save)
+        thread.start()
 
     def _new_chat_click(self, e):
         print("New Chat clicked")
@@ -161,14 +176,19 @@ class GGUFChatApp:
     def start_new_chat(self, persona: dict):
         self.current_persona = persona
         self._bot["instance"] = None
+        self.current_chat_id = None
         
         self.persona_avatar.content = ft.Image(src=self.current_persona.get("image_path"), error_content=ft.Icon(ft.Icons.PERSON))
         self.persona_name.value = self.current_persona.get("name", "Unknown")
         self.chat_column.controls.clear()
         self.current_chat_messages.clear()
 
-    def load_chat_history(self, messages: list):
+    def load_chat_history(self, chat: dict):
         self.chat_column.controls.clear()
+
+        self.start_new_chat(self.current_persona)
+        self.current_chat_id = chat.get('chat_id')
+        messages = chat.get('messages', [])
         
         self.current_chat_messages = messages
         
@@ -214,23 +234,25 @@ class GGUFChatApp:
 
 
         self._add_user_bubble(question)
+        self.user_input.value = ""
         self.user_input.disabled = True
         self.send_btn.disabled = True
         self.page.update()
-        self._scroll_to_bottom() 
-
-        start_time = time()
-        answer = self._bot["instance"].ask(question)
-        elapsed = time() - start_time
-
-        self._add_bot_bubble(answer, elapsed)
-        self.user_input.value = ""
-        self.user_input.disabled = False
-        self.send_btn.disabled = False
-        self.page.update()
-        self._scroll_to_bottom() 
+        self._scroll_to_bottom()
         self.user_input.focus()
 
+        def get_bot_response_thread():
+            start_time = time()
+            answer = self._bot["instance"].ask(question)
+            elapsed = time() - start_time
+
+            self._add_bot_bubble(answer, elapsed)
+            self.user_input.disabled = False
+            self.send_btn.disabled = False
+            self.page.update()
+            self._scroll_to_bottom()
+
+        threading.Thread(target=get_bot_response_thread).start()
 
     def _scroll_to_bottom(self):
         self.chat_column.scroll_to(offset=-1, duration=300)

@@ -56,16 +56,21 @@ class ChatBot:
         conversation_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in messages])
         
         summarization_prompt = f"""
-        Read the following conversation and summarize it in a single, concise sentence in Bulgarian.
-        The summary should capture the main topic of the discussion.
+        You are a conversation–summarization assistant.
 
-        Conversation:
-        ---
+        1. Read the conversation below.
+        2. Produce **exactly one sentence (max 35 words) ONLY in Bulgarian** that captures the main topic of the discussion.
+        3. Do not mention the speakers or add external information.
+        4. If the conversation is empty, output: „Няма съдържание за обобщаване.“
+
+        --- CONVERSATION START ---
         {conversation_text}
-        ---
+        --- CONVERSATION END ---
 
-        Summary (one sentence):
+        Summary:
         """
+
+        print(summarization_prompt)
         
         response = self.llm.invoke(summarization_prompt)
         

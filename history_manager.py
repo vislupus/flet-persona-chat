@@ -8,9 +8,9 @@ class HistoryManager:
     MEMORIES_FILE = "saved_memories.json"
 
     def __init__(self):
-        # Ensure files exist
         if not os.path.isfile(self.CHATS_FILE):
             self._write_json(self.CHATS_FILE, [])
+
         if not os.path.isfile(self.MEMORIES_FILE):
             self._write_json(self.MEMORIES_FILE, [])
 
@@ -24,8 +24,7 @@ class HistoryManager:
         with open(self.CHATS_FILE, "r", encoding="utf8") as f:
             return json.load(f)
 
-    def save_chat(self, persona_id: str, messages: list):
-        """Saves a new chat session."""
+    def save_chat(self, persona_id: str, messages: list) -> str:
         if not messages:
             return # Don't save empty chats
 
@@ -42,8 +41,15 @@ class HistoryManager:
         chats.append(new_chat)
         self._write_json(self.CHATS_FILE, chats)
         print(f"Chat {new_chat['chat_id']} saved.")
+        return new_chat['chat_id']
+    
+    def delete_chat(self, chat_id: str):
+        chats = self.load_chats()
+        updated_chats = [chat for chat in chats if chat.get('chat_id') != chat_id]
+        self._write_json(self.CHATS_FILE, updated_chats)
+        print(f"Chat {chat_id} deleted.")
 
-    def save_memory(self, persona_id: str, chat_id: str, summary: str):
+    def save_memory(self, persona_id: str, chat_id: str | None, summary: str):
         memories = self.load_memories()
         
         new_memory = {
@@ -61,3 +67,9 @@ class HistoryManager:
     def load_memories(self) -> list:
         with open(self.MEMORIES_FILE, "r", encoding="utf8") as f:
             return json.load(f)
+        
+    def delete_memory(self, memory_id: str):
+        memories = self.load_memories()
+        updated_memories = [m for m in memories if m.get('memory_id') != memory_id]
+        self._write_json(self.MEMORIES_FILE, updated_memories)
+        print(f"Memory {memory_id} deleted.")

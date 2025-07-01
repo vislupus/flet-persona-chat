@@ -6,7 +6,7 @@ from datetime import datetime
 class ChatsViewComponent:
     def __init__(self, page: ft.Page, on_chat_select: callable):
         self.page = page
-        self.on_chat_select = on_chat_select # Callback to tell the main app which chat to load
+        self.on_chat_select = on_chat_select
         self.history_manager = HistoryManager()
         self.persona_manager = PersonaManager()
 
@@ -22,9 +22,30 @@ class ChatsViewComponent:
     @property
     def view(self) -> ft.Control:
         return self._root
+    
+    def _show_delete_confirmation(self, chat_id: str, title: str):
+        def confirm_delete(e):
+            self.history_manager.delete_chat(chat_id)
+            self.update_view()
+            dlg.open = False
+            self.page.update()
+        
+        dlg = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Confirm Deletion"),
+            content=ft.Text(f"Are you sure you want to delete '{title}'?"),
+            actions=[
+                ft.TextButton("Delete", on_click=confirm_delete, style=ft.ButtonStyle(color=ft.Colors.RED)),
+                ft.TextButton("Cancel", on_click=lambda e: setattr(dlg, 'open', False) or self.page.update())
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+        self.page.overlay.append(dlg)
+        dlg.open = True
+        self.page.update()
+
 
     def update_view(self):
-        """Loads all chats and rebuilds the view, grouping them by date."""
         self.chats_list_container.controls.clear()
         all_chats = self.history_manager.load_chats()
         all_personas = {p['id']: p for p in self.persona_manager.load_personas()}
@@ -51,6 +72,7 @@ class ChatsViewComponent:
                             title=ft.Text(chat.get('title', 'Untitled Chat')),
                             subtitle=ft.Text(f"{len(chat['messages'])} messages with {persona_info.get('name', 'Unknown Persona')}"),
                             on_click=lambda _, c=chat: self.on_chat_select(c),
+                            trailing=ft.IconButton(ft.Icons.DELETE_OUTLINE, icon_color=ft.Colors.RED_ACCENT, on_click=lambda _, c=chat: self._show_delete_confirmation(c['chat_id'], c.get('title', '...'))),
                             data=chat
                         )
                     )
@@ -67,7 +89,6 @@ class ChatsViewComponent:
 
 
     def _format_date(self, date_str: str) -> str:
-        """Formats the date string for display."""
         date_obj = datetime.strptime(date_str, '%Y-%m-%d')
         if date_obj.date() == datetime.today().date():
             return "Today"
