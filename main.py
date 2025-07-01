@@ -2,6 +2,7 @@ import flet as ft
 from gguf_chat_ui import GGUFChatApp
 from persona_selector_ui import PersonaSelectorComponent, PersonaManager
 from chats_view_ui import ChatsViewComponent
+from memories_view_ui import MemoriesViewComponent
 from chatbot import ChatBot
 
 def main(page: ft.Page):
@@ -15,6 +16,7 @@ def main(page: ft.Page):
     persona_to_load_in_chat = [None]
     chat_to_load = [None]
     menu_expanded = [False]
+    memories_view_component = [None]
 
     content_area = ft.Container(expand=True)
     persona_manager = PersonaManager()
@@ -72,34 +74,30 @@ def main(page: ft.Page):
                 all_personas = persona_manager.load_personas()
                 persona_for_session = all_personas[0] if all_personas else None
 
-            # If we have a persona, we can proceed
             if persona_for_session:
-                # If chat component doesn't exist, create it
                 if chat_app_component[0] is None:
                     chat_app_component[0] = GGUFChatApp(page, persona=persona_for_session)
                 
-                # If we are loading a new persona, start a new chat
                 if persona_to_load:
                     chat_app_component[0].start_new_chat(persona_to_load)
                 
-                # If we are loading a saved chat, load its history
                 elif saved_chat_to_load:
-                    # First ensure the correct persona is set
                     chat_app_component[0].start_new_chat(persona_for_session) 
-                    # Then load the messages
                     chat_app_component[0].load_chat_history(saved_chat_to_load['messages'])
 
-            # Set the content area
             if chat_app_component[0]:
                 content_area.content = chat_app_component[0].view
                 chat_app_component[0]._on_resize()
-            else: # No personas exist at all
+            else:
                 content_area.content = ft.Column([ft.Icon(ft.icons.PERSON_SEARCH, size=50), ft.Text("No personas found.")])
 
         elif index == 3:
-            content_area.content = ft.Text("Memories", size=20)
+            if memories_view_component[0] is None:
+                memories_view_component[0] = MemoriesViewComponent(page)
+            
+            content_area.content = memories_view_component[0].view
+            memories_view_component[0].update_view()
         elif index == 4:
-            # If component doesn't exist, create it.
             if chats_view_component[0] is None:
                 chats_view_component[0] = ChatsViewComponent(page, on_chat_select=on_chat_selected)
             
