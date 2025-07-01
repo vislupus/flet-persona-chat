@@ -41,7 +41,8 @@ class ChatBot:
             history_messages_key="history",
         )
 
-        print(f"✅ Създаден бот с промпт: {self.system_prompt}")
+        # print(f"✅ Създаден бот с промпт: {self.system_prompt}")
+
 
     def ask(self, user_input: str) -> str:
         response = self.chain.invoke(
@@ -49,4 +50,28 @@ class ChatBot:
             config={"configurable": {"session_id": "ram"}},
         )
         return response.content.strip()
+    
+
+    def summarize(self, messages: list) -> str:
+        conversation_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in messages])
+        
+        summarization_prompt = f"""
+        Read the following conversation and summarize it in a single, concise sentence in Bulgarian.
+        The summary should capture the main topic of the discussion.
+
+        Conversation:
+        ---
+        {conversation_text}
+        ---
+
+        Summary (one sentence):
+        """
+        
+        response = self.llm.invoke(summarization_prompt)
+        
+        summary = response.content.strip()
+        if summary.startswith('"') and summary.endswith('"'):
+            summary = summary[1:-1]
+            
+        return summary
 
