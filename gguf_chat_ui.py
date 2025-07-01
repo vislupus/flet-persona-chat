@@ -112,7 +112,43 @@ class GGUFChatApp:
 
 
     def _save_memory_click(self, e):
-        print("Save Memory clicked (functionality coming soon)!")
+        """Summarizes the current conversation and saves it as a memory."""
+        if not self.current_chat_messages:
+            # We can't summarize an empty chat
+            print("Cannot create a memory from an empty chat.")
+            return
+
+        # Show a loading indicator in the UI
+        self.page.dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Creating Memory..."),
+            content=ft.Row([ft.ProgressRing(), ft.Text("The AI is summarizing the conversation.")], spacing=20),
+        )
+        self.page.dialog.open = True
+        self.page.update()
+        
+        try:
+            # Ensure we have a bot instance to do the summarization
+            if self._bot["instance"] is None:
+                self._bot["instance"] = ChatBot(system_prompt=self.current_persona.get("prompt", "You are a helpful assistant."))
+            
+            # Get the summary from the bot
+            summary = self._bot["instance"].summarize(self.current_chat_messages)
+            
+            # Save the memory using the manager
+            self.history_manager.save_memory(
+                persona_id=self.current_persona['id'],
+                chat_id="temp_chat", # In a real app, you might link this to a saved chat_id
+                summary=summary
+            )
+            print(f"Memory saved: {summary}")
+
+        except Exception as ex:
+            print(f"Error creating memory: {ex}")
+        finally:
+            # Always close the loading dialog
+            self.page.dialog.open = False
+            self.page.update()
 
     def _new_chat_click(self, e):
         print("New Chat clicked")
@@ -132,21 +168,16 @@ class GGUFChatApp:
         self.current_chat_messages.clear()
 
     def load_chat_history(self, messages: list):
-        """Loads a list of messages and displays them in the chat window."""
-        # First, ensure the view is clean
         self.chat_column.controls.clear()
         
-        # Set the current message history
         self.current_chat_messages = messages
         
-        # Re-create the bubbles on the screen
         for message in messages:
             if message.get("role") == "user":
                 self._add_user_bubble(message.get("content"), record_message=False)
             elif message.get("role") == "bot":
                 self._add_bot_bubble(message.get("content"), elapsed=0, record_message=False)
         
-        # Reset the bot instance so it can pick up the new history context on the next message
         self._bot["instance"] = None
         
 
