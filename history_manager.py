@@ -24,7 +24,7 @@ class HistoryManager:
         with open(self.CHATS_FILE, "r", encoding="utf8") as f:
             return json.load(f)
 
-    def save_chat(self, persona_id: str, messages: list) -> str:
+    def save_chat(self, persona_id: str, messages: list, title: str) -> str:
         if not messages:
             return # Don't save empty chats
 
@@ -35,13 +35,28 @@ class HistoryManager:
             "persona_id": persona_id,
             "timestamp": datetime.now().isoformat(),
             "messages": messages,
-            "title": f"Chat from {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            "title": title
         }
         
         chats.append(new_chat)
         self._write_json(self.CHATS_FILE, chats)
         print(f"Chat {new_chat['chat_id']} saved.")
         return new_chat['chat_id']
+    
+    def update_chat(self, chat_id: str, messages: list):
+        if not chat_id: 
+            return
+        
+        chats = self.load_chats()
+        chat_found = False
+        for i, chat in enumerate(chats):
+            if chat.get('chat_id') == chat_id:
+                chats[i]['messages'] = messages
+                chat_found = True
+                break
+            
+        if chat_found:
+            self._write_json(self.CHATS_FILE, chats)
     
     def delete_chat(self, chat_id: str):
         chats = self.load_chats()
