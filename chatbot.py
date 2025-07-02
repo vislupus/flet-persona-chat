@@ -51,6 +51,18 @@ class ChatBot:
         )
         return response.content.strip()
     
+    
+    def summarize_title(self, messages: list) -> str:
+        conversation_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in messages])
+        summarization_prompt = f"""Based on the conversation below, produce a very short title (max 5 words) ONLY in Bulgarian.
+        --- CONVERSATION START ---
+        {conversation_text}
+        --- CONVERSATION END ---
+        Title:"""
+        response = self.llm.invoke(summarization_prompt)
+        summary = response.content.strip().replace('"', '')
+        return summary
+    
 
     def summarize(self, messages: list) -> str:
         conversation_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in messages])
