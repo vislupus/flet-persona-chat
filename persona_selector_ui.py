@@ -95,7 +95,7 @@ class PersonaSelectorComponent:
         self._add_temp_image_path = None
 
         self.grid = ft.GridView(
-            runs_count=4, 
+            runs_count=5, 
             spacing=10, 
             run_spacing=10, 
             child_aspect_ratio=1,
