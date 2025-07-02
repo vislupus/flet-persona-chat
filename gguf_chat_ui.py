@@ -116,16 +116,32 @@ class GGUFChatApp:
         if not self.current_chat_messages:
             self._show_info_dialog("Cannot save an empty chat!")
             return
+        
+        if self.current_chat_id:
+            self._show_info_dialog("Already Saved", "This chat is already saved and will auto-update.")
+            return
 
-        try:
-            new_id = self.history_manager.save_chat(
-                persona_id=self.current_persona['id'], 
-                messages=self.current_chat_messages
-            )
-            self.current_chat_id = new_id
-            self._show_info_dialog("Success", "Chat saved successfully!")
-        except Exception as ex:
-            self._show_info_dialog("Error", f"Could not save chat: {ex}")
+        loading_dialog = ft.AlertDialog(modal=True, title=ft.Text("Saving Chat..."), content=ft.Row([ft.ProgressRing(), ft.Text("Generating title...")]))
+        
+        def do_summarize_and_save_chat():
+            try:
+                if self._bot["instance"] is None: 
+                    self._bot["instance"] = ChatBot(system_prompt=self.current_persona.get("prompt", "..."))
+
+                title = self._bot["instance"].summarize_title(self.current_chat_messages)
+                new_id = self.history_manager.save_chat(self.current_persona['id'], self.current_chat_messages, title)
+                self.current_chat_id = new_id
+                self._show_info_dialog("Success", f"Chat saved with title: '{title}'")
+            except Exception as ex:
+                self._show_info_dialog("Error", f"Could not save chat: {ex}")
+            finally:
+                loading_dialog.open = False
+                self.page.update()
+
+        self.page.overlay.append(loading_dialog)
+        loading_dialog.open = True
+        self.page.update()
+        threading.Thread(target=do_summarize_and_save_chat).start()
 
 
     def _save_memory_click(self, e):
@@ -167,9 +183,7 @@ class GGUFChatApp:
 
     def _new_chat_click(self, e):
         print("New Chat clicked")
-        self.chat_column.controls.clear()
-        self.current_chat_messages.clear()
-        self._bot["instance"] = None
+        self.start_new_chat(self.current_persona)
         self.page.update()
 
     
@@ -247,6 +261,14 @@ class GGUFChatApp:
             elapsed = time() - start_time
 
             self._add_bot_bubble(answer, elapsed)
+
+            if self.current_chat_id:
+                try:
+                    self.history_manager.update_chat(self.current_chat_id, self.current_chat_messages)
+                    print(f"Chat {self.current_chat_id} auto-saved.")
+                except Exception as ex:
+                    print(f"Auto-save failed for chat {self.current_chat_id}: {ex}")
+
             self.user_input.disabled = False
             self.send_btn.disabled = False
             self.page.update()
