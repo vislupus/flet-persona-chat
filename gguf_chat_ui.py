@@ -381,8 +381,6 @@ class GGUFChatApp:
                     alignment=ft.alignment.center_left,
                 )
 
-                # self.active_bot_wrapper.width = self.page.width * self.BUBBLE_RATIO
-
                 self.active_loading_row.controls[1] = wrapper
                 self.active_loading_row.data = new_message_id
                 
@@ -407,7 +405,6 @@ class GGUFChatApp:
     def _scroll_to_bottom(self):
         self.chat_column.scroll_to(offset=-1, duration=300)
 
-
     def _add_user_bubble(self, text: str, message_id: str = None, record_message: bool = True):
         if record_message:
             message_id = str(uuid.uuid4())
@@ -425,7 +422,21 @@ class GGUFChatApp:
 
         delete_icon = self._create_delete_icon(message_id)
 
-        bubble_with_icon = ft.Column([bubble, delete_icon])
+        bubble_with_icon = ft.Stack(
+            [
+                ft.Container(
+                    content=bubble,
+                    margin=ft.margin.only(bottom=27),
+                ),
+                ft.Container(
+                    content=ft.Row([delete_icon], spacing=0, alignment=ft.MainAxisAlignment.END),
+                    right=0,
+                    bottom=0,
+                    
+                ),
+            ],
+            clip_behavior=ft.ClipBehavior.NONE,
+        )
 
         wrapper = ft.Container(
             content=bubble_with_icon,
