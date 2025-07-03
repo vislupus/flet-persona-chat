@@ -18,9 +18,11 @@ class GGUFChatApp:
         self.history_manager = HistoryManager()
         self.current_chat_messages = []
         self.current_chat_id = None
+
         self.editing_message_id = None
         self.active_bot_bubble = None
         self.active_bot_wrapper = None
+        self.active_loading_row = None
 
         self.persona_avatar = ft.CircleAvatar(
             content=ft.Image(src=self.current_persona.get("image_path"), error_content=ft.Icon(ft.Icons.PERSON))
@@ -107,6 +109,72 @@ class GGUFChatApp:
     def view(self):
         return self._root
     
+    def _show_delete_confirmation(self, e):
+        message_id = e.control.data
+        def confirm_delete(event):
+            self._delete_message(message_id)
+            dialog.open = False
+            self.page.update()
+
+        dialog = ft.AlertDialog(
+            modal=True, title=ft.Text("Confirm Deletion"),
+            content=ft.Text("Are you sure you want to delete this message? This action cannot be undone."),
+            actions=[
+                ft.TextButton("Delete", on_click=confirm_delete, style=ft.ButtonStyle(color=ft.Colors.RED)),
+                ft.TextButton("Cancel", on_click=lambda _: setattr(dialog, 'open', False) or self.page.update())
+            ]
+        )
+        self.page.overlay.append(dialog)
+        dialog.open = True
+        self.page.update()
+
+    def _delete_message(self, message_id_to_delete: str):
+        indices_to_remove = []
+        ids_to_remove = set() 
+        for i, msg in enumerate(self.current_chat_messages):
+            if msg.get('id') == message_id_to_delete:
+                indices_to_remove.append(i)
+                ids_to_remove.add(msg.get('id'))
+                if msg.get('role') == 'user' and (i + 1) < len(self.current_chat_messages):
+                    next_msg = self.current_chat_messages[i+1]
+                    if next_msg.get('role') == 'bot':
+                        indices_to_remove.append(i + 1)
+                        ids_to_remove.add(next_msg.get('id'))
+                break 
+        
+        for i in sorted(indices_to_remove, reverse=True):
+            del self.current_chat_messages[i]
+        
+        self.chat_column.controls = [c for c in self.chat_column.controls if c.data not in ids_to_remove]
+        
+        if self.current_chat_id:
+            self.history_manager.update_chat(self.current_chat_id, self.current_chat_messages)
+            print(f"Chat {self.current_chat_id} updated after deletion.")
+        self.page.update()
+    
+    def _create_delete_icon(self, message_id):
+        icon = ft.Icon(
+            name=ft.Icons.DELETE_OUTLINE,
+            size=16,
+            color=ft.Colors.with_opacity(0.5, ft.Colors.BLACK)
+        )
+
+        def on_hover(e):
+            e.control.content.color = ft.Colors.RED if e.data == "true" else ft.Colors.with_opacity(0.5, ft.Colors.BLACK)
+            e.control.update()
+        
+        return ft.Container(
+            content=icon,
+            data=message_id,
+            on_click=self._show_delete_confirmation,
+            on_hover=on_hover,
+            width=30,
+            height=30,
+            border_radius=30,
+            tooltip="Delete Message",
+            alignment=ft.alignment.center
+        )
+
     def _show_info_dialog(self, title: str, content):
         content_control = content if isinstance(content, ft.Control) else ft.Text(content)
         
@@ -152,7 +220,6 @@ class GGUFChatApp:
         self.page.update()
         threading.Thread(target=do_summarize_and_save_chat).start()
 
-
     def _save_memory_click(self, e):
         if not self.current_chat_messages: 
             return
@@ -194,7 +261,6 @@ class GGUFChatApp:
         print("New Chat clicked")
         self.start_new_chat(self.current_persona)
         self.page.update()
-
     
     def start_new_chat(self, persona: dict):
         self.current_persona = persona
@@ -207,8 +273,6 @@ class GGUFChatApp:
         self.current_chat_messages.clear()
 
     def load_chat_history(self, chat: dict):
-        self.chat_column.controls.clear()
-
         self.start_new_chat(self.current_persona)
         self.current_chat_id = chat.get('chat_id')
         messages = chat.get('messages', [])
@@ -217,15 +281,15 @@ class GGUFChatApp:
         
         self.current_chat_messages = messages
         
-        for message in messages:
+        for message in self.current_chat_messages:
             if message.get("role") == "user":
-                self._add_user_bubble(message.get("content"), record_message=False)
+                self._add_user_bubble(message.get("content"), message_id=message.get("id"), record_message=False)
             elif message.get("role") == "bot":
-                self._add_bot_bubble(message.get("content"), elapsed=0, record_message=False)
+                self._add_bot_bubble(message.get("content"), elapsed=0, message_id=message.get("id"), record_message=False)
         
         self._bot["instance"] = None
+        self.page.update()
         
-
     def _on_resize(self, e=None):
         if not self._root.page:
             return
@@ -238,6 +302,9 @@ class GGUFChatApp:
         max_width = page_width * self.BUBBLE_RATIO
         
         for row in self.chat_column.controls:
+            if not isinstance(row, ft.Row) or not row.data: 
+                continue
+
             wrapper = None
             if isinstance(row, ft.Row) and len(row.controls) > 0:
                 if row.alignment == ft.MainAxisAlignment.START: # Bot message
@@ -251,10 +318,9 @@ class GGUFChatApp:
 
         self.page.update()
         
-
     def _send_message(self, e):
         question = self.user_input.value.strip()
-        if not question or not self.current_persona or self.active_bot_bubble:
+        if not question or not self.current_persona or self.active_loading_row:
             return
 
         if self._bot["instance"] is None:
@@ -276,21 +342,53 @@ class GGUFChatApp:
             answer = self._bot["instance"].ask(question)
             elapsed = time() - start_time
 
-            self.current_chat_messages.append({"role": "bot", "content": answer})
-
-            final_content_md = f"{answer}\n\n*Response time: {elapsed:.2f} s*"
+            new_message_id = str(uuid.uuid4())
+            self.current_chat_messages.append({"id": new_message_id, "role": "bot", "content": answer})
             
-            if self.active_bot_bubble and self.active_bot_wrapper:
-                self.active_bot_bubble.content = ft.Markdown(
-                    final_content_md,
-                    selectable=True,
-                    extension_set="git-hub-flavored",
-                    code_theme="atom-one-dark"
+            if self.active_bot_bubble and self.active_bot_wrapper and self.active_loading_row:
+                final_content_md = f"{answer}\n\n*Response time: {elapsed:.2f} s*"
+
+                bubble = ft.Container(
+                    content=ft.Markdown(
+                        final_content_md, selectable=True, extension_set="git-hub-flavored", code_theme="atom-one-dark"
+                    ),
+                    padding=10, 
+                    bgcolor=ft.Colors.with_opacity(0.8, ft.Colors.GREY_200),
+                    border_radius=10, 
+                    border=ft.border.all(0.3, ft.Colors.OUTLINE),
                 )
-                self.active_bot_wrapper.width = self.page.width * self.BUBBLE_RATIO
+                
+                delete_icon_row = ft.Row(
+                    [
+                        self._create_delete_icon(new_message_id)
+                    ], 
+                    alignment=ft.MainAxisAlignment.END,
+                    vertical_alignment=ft.CrossAxisAlignment.END,
+                )
+
+                message_stack = ft.Stack(
+                    [bubble, ft.Container(
+                        content=delete_icon_row,
+                        bottom=0,
+                        right=0,
+                    ),], 
+                    clip_behavior=ft.ClipBehavior.NONE,
+                )
+
+                wrapper = ft.Container(
+                    content=message_stack,
+                    width=self.page.width * self.BUBBLE_RATIO,
+                    alignment=ft.alignment.center_left,
+                )
+
+                # self.active_bot_wrapper.width = self.page.width * self.BUBBLE_RATIO
+
+                self.active_loading_row.controls[1] = wrapper
+                self.active_loading_row.data = new_message_id
                 
                 self.active_bot_bubble = None 
                 self.active_bot_wrapper = None
+                self.active_loading_row = None
 
             if self.current_chat_id:
                 try:
@@ -310,9 +408,12 @@ class GGUFChatApp:
         self.chat_column.scroll_to(offset=-1, duration=300)
 
 
-    def _add_user_bubble(self, text: str, record_message: bool = True):
+    def _add_user_bubble(self, text: str, message_id: str = None, record_message: bool = True):
         if record_message:
-            self.current_chat_messages.append({"role": "user", "content": text})
+            message_id = str(uuid.uuid4())
+            self.current_chat_messages.append({"id": message_id, "role": "user", "content": text})
+        elif not message_id:
+            message_id = str(uuid.uuid4())
 
         bubble = ft.Container(
             content=ft.Markdown(text, selectable=True, extension_set="git-hub-flavored", code_theme="atom-one-dark"),
@@ -322,26 +423,32 @@ class GGUFChatApp:
             border=ft.border.all(0.3, ft.Colors.OUTLINE),
         )
 
+        delete_icon = self._create_delete_icon(message_id)
+
+        bubble_with_icon = ft.Column([bubble, delete_icon])
+
         wrapper = ft.Container(
-            content=bubble,
+            content=bubble_with_icon,
             width=self.page.width * self.BUBBLE_RATIO,
             alignment=ft.alignment.center_right,
             margin=ft.margin.only(right=20),
         )
 
         self.chat_column.controls.append(
-            ft.Row([wrapper], alignment=ft.MainAxisAlignment.END)
+            ft.Row(
+                [wrapper], 
+                alignment=ft.MainAxisAlignment.END, 
+                data=message_id
+            )
         )
 
     def _add_bot_loading_bubble(self):
-        bubble = ft.Container(
+        loading_bubble = ft.Container(
             content=ft.ProgressRing(width=20, height=20, stroke_width=2.5),
-            padding=12,
-            bgcolor=ft.Colors.with_opacity(0.8, ft.Colors.GREY_200),
-            border_radius=10,
-            border=ft.border.all(0.3, ft.Colors.OUTLINE),
+            padding=12, bgcolor=ft.Colors.with_opacity(0.8, ft.Colors.GREY_200),
+            border_radius=10, border=ft.border.all(0.3, ft.Colors.OUTLINE),
         )
-        self.active_bot_bubble = bubble  
+        self.active_bot_bubble = loading_bubble 
 
         wrapper = ft.Container(
             content=self.active_bot_bubble, 
@@ -349,30 +456,33 @@ class GGUFChatApp:
             alignment=ft.alignment.center_left,
         )
         self.active_bot_wrapper = wrapper
-        
-        self.chat_column.controls.append(
-            ft.Row(
-                [
-                    ft.Container(
-                        content=ft.Image(
-                            src=self.current_persona.get("image_path"), 
-                            fit=ft.ImageFit.COVER, 
-                            error_content=ft.Icon(ft.Icons.PERSON)
-                        ),
-                        width=40, height=40, border_radius=20, 
-                        clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+
+        row = ft.Row(
+            [
+                ft.Container(
+                    content=ft.Image(
+                        src=self.current_persona.get("image_path"), 
+                        fit=ft.ImageFit.COVER, 
+                        error_content=ft.Icon(ft.Icons.PERSON)
                     ),
-                    self.active_bot_wrapper,
-                ], 
-                alignment=ft.MainAxisAlignment.START, 
-                vertical_alignment=ft.CrossAxisAlignment.START, 
-                spacing=10
-            )
+                    width=40, height=40, border_radius=20, 
+                    clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+                ),
+                self.active_bot_wrapper
+            ], 
+            alignment=ft.MainAxisAlignment.START, 
+            vertical_alignment=ft.CrossAxisAlignment.START, 
+            spacing=10,
+            data=None # No ID yet
         )
+
+        self.active_loading_row = row
+        self.chat_column.controls.append(self.active_loading_row)
 
     def _add_bot_bubble(self, answer: str, elapsed: float, record_message: bool = True):
         if record_message:
-            self.current_chat_messages.append({"role": "bot", "content": answer})
+            message_id = str(uuid.uuid4())
+            self.current_chat_messages.append({"id": message_id, "role": "bot", "content": answer})
 
         content = f"{answer}"
         if elapsed > 0:
@@ -396,7 +506,7 @@ class GGUFChatApp:
             width=self.page.width * self.BUBBLE_RATIO,
             alignment=ft.alignment.center_left,
         )
-        
+
         self.chat_column.controls.append(
             ft.Row(
                 [
@@ -409,10 +519,11 @@ class GGUFChatApp:
                         width=40, height=40, border_radius=20, 
                         clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
                     ),
-                    wrapper,
+                    wrapper
                 ], 
                 alignment=ft.MainAxisAlignment.START, 
                 vertical_alignment=ft.CrossAxisAlignment.START, 
-                spacing=10
+                spacing=10,
+                data=message_id
             )
         )
