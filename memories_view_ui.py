@@ -13,7 +13,7 @@ class MemoriesViewComponent:
         self.memories_list = ft.ListView(expand=True, spacing=15, padding=20)
         
         self._root = ft.Column([
-            ft.Row([ft.Icon(ft.Icons.FOLDER_SPECIAL), ft.Text("Memories", style=ft.TextThemeStyle.HEADLINE_MEDIUM)]),
+            ft.Row([ft.Icon(ft.Icons.FOLDER_SPECIAL), ft.Text("Memories", theme_style=ft.TextThemeStyle.HEADLINE_MEDIUM)]),
             ft.Divider(),
             self.memories_list
         ], expand=True)

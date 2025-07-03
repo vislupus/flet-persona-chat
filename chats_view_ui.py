@@ -14,7 +14,7 @@ class ChatsViewComponent:
         self.chats_list_container = ft.Column(expand=True, spacing=10, scroll=ft.ScrollMode.ADAPTIVE)
         
         self._root = ft.Column([
-            ft.Row([ft.Icon(ft.Icons.HISTORY), ft.Text("Saved Chats", style=ft.TextThemeStyle.HEADLINE_MEDIUM)]),
+            ft.Row([ft.Icon(ft.Icons.HISTORY), ft.Text("Saved Chats", theme_style=ft.TextThemeStyle.HEADLINE_MEDIUM)]),
             ft.Divider(),
             self.chats_list_container
         ], expand=True)
