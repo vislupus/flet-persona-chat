@@ -116,7 +116,9 @@ def main(page: ft.Page):
             
             content_area.content = chats_view_component[0].view
             chats_view_component[0].update_view()
-        elif index == 5: # Settings
+        elif index == 5: # Person
+            content_area.content = ft.Text("Person", size=20)
+        elif index == 6: # Settings
             content_area.content = ft.Text("Settings", size=20)
         
         page.update()
@@ -173,8 +175,8 @@ def main(page: ft.Page):
                 label="Home"
             ),
             ft.NavigationRailDestination(
-                icon=rail_icon(ft.Icons.ACCOUNT_CIRCLE_OUTLINED, "Personas"),
-                selected_icon=rail_icon(ft.Icons.ACCOUNT_CIRCLE, "Personas"),
+                icon=rail_icon(ft.Icons.PEOPLE_OUTLINED, "Personas"),
+                selected_icon=rail_icon(ft.Icons.PEOPLE, "Personas"),
                 label="Personas",
             ),
             ft.NavigationRailDestination(
@@ -183,14 +185,19 @@ def main(page: ft.Page):
                 label="Chat room",
             ),
             ft.NavigationRailDestination(
-                icon=rail_icon(ft.Icons.FOLDER_OUTLINED, "Memories"),
-                selected_icon=rail_icon(ft.Icons.FOLDER, "Memories"),
+                icon=rail_icon(ft.Icons.WEB_STORIES_OUTLINED, "Memories"),
+                selected_icon=rail_icon(ft.Icons.WEB_STORIES, "Memories"),
                 label="Memories",
             ),
             ft.NavigationRailDestination(
                 icon=rail_icon(ft.Icons.TEXT_SNIPPET_OUTLINED, "Chats"),
                 selected_icon=rail_icon(ft.Icons.TEXT_SNIPPET, "Chats"),
                 label="Chats",
+            ),
+            ft.NavigationRailDestination(
+                icon=rail_icon(ft.Icons.ACCOUNT_CIRCLE_OUTLINED, "Person"),
+                selected_icon=rail_icon(ft.Icons.ACCOUNT_CIRCLE, "Person"),
+                label="Person",
             ),
             ft.NavigationRailDestination(
                 icon=rail_icon(ft.Icons.SETTINGS_OUTLINED, "Settings"),
@@ -212,7 +219,7 @@ def main(page: ft.Page):
     page.update()
 
     def handle_resize(e):
-        menu_spacer.height = e.height - 48*7 - 10
+        menu_spacer.height = e.height - 48*8 - 10
         menu_spacer.update()
 
         if chat_app_component[0] and navigation_rail.selected_index == 2:
