@@ -4,6 +4,7 @@ from persona_selector_ui import PersonaSelectorComponent, PersonaManager
 from chats_view_ui import ChatsViewComponent
 from memories_view_ui import MemoriesViewComponent
 from history_manager import HistoryManager
+from person_view_ui import PersonViewComponent
 
 
 def main(page: ft.Page):
@@ -18,6 +19,7 @@ def main(page: ft.Page):
     persona_to_load_in_chat = [None]
     chat_to_load = [None]
     menu_expanded = [False]
+    person_view_component = [None]
 
     content_area = ft.Container(expand=True)
     persona_manager = PersonaManager()
@@ -117,7 +119,10 @@ def main(page: ft.Page):
             content_area.content = chats_view_component[0].view
             chats_view_component[0].update_view()
         elif index == 5: # Person
-            content_area.content = ft.Text("Person", size=20)
+            if person_view_component[0] is None:
+                person_view_component[0] = PersonViewComponent(page)
+            content_area.content = person_view_component[0].view
+            person_view_component[0].update_view()
         elif index == 6: # Settings
             content_area.content = ft.Text("Settings", size=20)
         

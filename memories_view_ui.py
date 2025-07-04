@@ -30,7 +30,7 @@ class MemoriesViewComponent:
                         spacing=10,
                     ),
                     alignment=ft.alignment.center_left,
-                    padding=ft.padding.only(left=10, right=10, top=10, bottom=10),
+                    padding=ft.padding.only(left=10, right=10, top=15, bottom=10),
                 ),
                 ft.Divider(height=1),
                 ft.Container(
