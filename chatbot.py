@@ -2,11 +2,16 @@ from langchain_community.chat_models import ChatLlamaCpp
 from langchain.prompts import MessagesPlaceholder, ChatPromptTemplate
 from langchain_core.runnables import RunnableWithMessageHistory
 from langchain_core.chat_history import InMemoryChatMessageHistory
+from person_view_ui import PersonInfoManager
 
 
 class ChatBot:
     def __init__(self, system_prompt: str):
-        self.system_prompt = system_prompt
+        self.person_info_manager = PersonInfoManager()
+        person_info = self.person_info_manager.load_info()
+        person_info_text = "\n".join([info["content"] for info in person_info]) if person_info else "No personal info provided."
+        full_prompt = f"{system_prompt}\n\nPersonal Info:\n{person_info_text}"
+        self.system_prompt = full_prompt
         self.llm = ChatLlamaCpp(
             model_path=r"models\gemma-3-1B-it-QAT-Q4_0.gguf",
             max_tokens=2048,
