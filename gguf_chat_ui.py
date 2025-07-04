@@ -1,3 +1,4 @@
+import asyncio
 import threading
 from time import time
 import uuid
@@ -24,8 +25,18 @@ class GGUFChatApp:
         self.active_bot_wrapper = None
         self.active_loading_row = None
 
-        self.persona_avatar = ft.CircleAvatar(
-            content=ft.Image(src=self.current_persona.get("image_path"), error_content=ft.Icon(ft.Icons.PERSON))
+        self.persona_avatar = ft.Container(
+            content=ft.Image(
+                src=self.current_persona.get("image_path"),
+                fit=ft.ImageFit.COVER,
+                error_content=ft.Icon(ft.Icons.PERSON)
+            ),
+            width=45,
+            height=45,
+            border_radius=23,
+            bgcolor=ft.Colors.with_opacity(0.8, ft.Colors.GREY_200),
+            border=ft.border.all(0.3, ft.Colors.OUTLINE),
+            clip_behavior=ft.ClipBehavior.ANTI_ALIAS
         )
         self.persona_name = ft.Text(
             self.current_persona.get("name", "Unknown"), 
@@ -64,10 +75,16 @@ class GGUFChatApp:
             on_click=self._send_message
         )
 
+        self.cancel_btn = ft.IconButton(
+            icon=ft.Icons.CANCEL, tooltip="Cancel Edit",
+            on_click=self._cancel_edit,
+            visible=False
+        )
+
         self.chat_column = ft.Column(
             expand=True, spacing=10, 
             scroll=ft.ScrollMode.ALWAYS,
-            auto_scroll=True,
+            auto_scroll=False,
         )
 
         self.chat_container = ft.Container(
@@ -87,7 +104,7 @@ class GGUFChatApp:
         )
 
         self.input_container = ft.Container(
-            content=ft.Row([self.user_input, self.send_btn]),
+            content=ft.Row([self.user_input, self.send_btn, self.cancel_btn]),
             padding=10,
             bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),
             height=80,
@@ -174,6 +191,59 @@ class GGUFChatApp:
             tooltip="Delete Message",
             alignment=ft.alignment.center
         )
+
+    def _create_edit_icon(self, message_id):
+        icon = ft.Icon(
+            name=ft.Icons.EDIT_OUTLINED,
+            size=16,
+            color=ft.Colors.with_opacity(0.5, ft.Colors.BLACK)
+        )
+
+        def on_hover(e):
+            e.control.content.color = ft.Colors.BLUE_ACCENT if e.data == "true" else ft.Colors.with_opacity(0.5, ft.Colors.BLACK)
+            e.control.update()
+        
+        return ft.Container(
+            content=icon,
+            data=message_id,
+            on_click=self._start_editing_message,
+            on_hover=on_hover,
+            width=30,
+            height=30,
+            border_radius=30,
+            tooltip="Edit Message",
+            alignment=ft.alignment.center
+        )
+    
+    def _start_editing_message(self, e):
+        message_id = e.control.data
+        self.editing_message_id = message_id
+        
+        message_text = ""
+        for msg in self.current_chat_messages:
+            if msg.get('id') == message_id:
+                message_text = msg.get('content')
+                break
+        
+        self.user_input.value = message_text
+        self.user_input.label = "Editing message..."
+        self.send_btn.icon = ft.Icons.CHECK
+        self.send_btn.tooltip = "Confirm Edit"
+        self.user_input.focus()
+        self.cancel_btn.visible = True
+        self.page.update()
+
+    def _exit_editing_mode(self):
+        self.editing_message_id = None
+        self.user_input.value = ""
+        self.user_input.label = "Enter your message"
+        self.send_btn.icon = ft.Icons.SEND_ROUNDED
+        self.send_btn.tooltip = "Send Message"
+        self.cancel_btn.visible = False
+        self.page.update()
+
+    def _cancel_edit(self, e):
+        self._exit_editing_mode()
 
     def _show_info_dialog(self, title: str, content):
         content_control = content if isinstance(content, ft.Control) else ft.Text(content)
@@ -267,7 +337,7 @@ class GGUFChatApp:
         self._bot["instance"] = None
         self.current_chat_id = None
         self.editing_message_id = None
-        self.persona_avatar.content = ft.Image(src=self.current_persona.get("image_path"), error_content=ft.Icon(ft.Icons.PERSON))
+        self.persona_avatar.content = ft.Image(src=self.current_persona.get("image_path"), fit=ft.ImageFit.COVER, error_content=ft.Icon(ft.Icons.PERSON))
         self.persona_name.value = self.current_persona.get("name", "Unknown")
         self.chat_column.controls.clear()
         self.current_chat_messages.clear()
@@ -319,25 +389,121 @@ class GGUFChatApp:
         self.page.update()
         
     def _send_message(self, e):
+        if self.editing_message_id:
+            self._submit_edit()
+        else:
+            self._send_new_message()
+
+    def _send_new_message(self):
         question = self.user_input.value.strip()
         if not question or not self.current_persona or self.active_loading_row:
             return
 
+
+        self._add_user_bubble(question)
+        self.user_input.value = ""
+        self.user_input.focus()
+        self.page.update()
+
+        self._get_bot_response(question)
+
+    def _submit_edit(self):
+        edited_text = self.user_input.value.strip()
+        if not edited_text:
+            return
+
+        user_msg_index = -1
+        for i, msg in enumerate(self.current_chat_messages):
+            if msg.get('id') == self.editing_message_id:
+                user_msg_index = i
+                break
+        
+        if user_msg_index == -1:
+            self._exit_editing_mode()
+            return
+
+        self.current_chat_messages[user_msg_index]['content'] = edited_text
+        self.current_chat_messages = self.current_chat_messages[:user_msg_index + 1]
+
+        row_to_update = None
+        for control in self.chat_column.controls:
+            if control.data == self.editing_message_id:
+                row_to_update = control
+                break
+        
+        if row_to_update:
+            # Rebuild the bubble to ensure UI update
+            new_bubble = ft.Container(
+                content=ft.Markdown(
+                    edited_text,
+                    selectable=True,
+                    extension_set="git-hub-flavored",
+                    code_theme="atom-one-dark"
+                ),
+                padding=10,
+                bgcolor=ft.Colors.PRIMARY_CONTAINER,
+                border_radius=10,
+                border=ft.border.all(0.3, ft.Colors.OUTLINE),
+            )
+
+            edit_icon = self._create_edit_icon(self.editing_message_id)
+            delete_icon = self._create_delete_icon(self.editing_message_id)
+
+            new_bubble_with_icon = ft.Stack(
+                [
+                    ft.Container(
+                        content=new_bubble,
+                        margin=ft.margin.only(bottom=27),
+                    ),
+                    ft.Container(
+                        content=ft.Row([edit_icon, delete_icon], spacing=0, alignment=ft.MainAxisAlignment.END),
+                        right=0,
+                        bottom=0,
+                    ),
+                ],
+                clip_behavior=ft.ClipBehavior.NONE,
+            )
+
+            new_wrapper = ft.Container(
+                content=new_bubble_with_icon,
+                width=self.page.width * self.BUBBLE_RATIO,
+                alignment=ft.alignment.center_right,
+                margin=ft.margin.only(right=20),
+            )
+
+            # Replace the old row's wrapper with the new one
+            row_to_update.controls[0] = new_wrapper
+            
+            # Remove all subsequent controls from the UI
+            self.chat_column.controls = self.chat_column.controls[:self.chat_column.controls.index(row_to_update) + 1]
+        
+        self._exit_editing_mode()
+        self.page.update()
+
+        self._get_bot_response(edited_text)
+
+
+    def _get_bot_response(self, question: str):
         if self._bot["instance"] is None:
             prompt = self.current_persona.get("prompt", "You are a helpful assistant.")
             self._bot["instance"] = ChatBot(system_prompt=prompt)
 
+        self._bot["instance"]._history.clear()
+        for msg in self.current_chat_messages[:-1]:
+            if msg['role'] == 'user':
+                self._bot["instance"]._history.add_user_message(msg['content'])
+            elif msg['role'] == 'bot':
+                self._bot["instance"]._history.add_ai_message(msg['content'])
 
-        self._add_user_bubble(question)
-        self.user_input.value = ""
         self.user_input.disabled = True
         self.send_btn.disabled = True
+        self.cancel_btn.visible = False
         self._add_bot_loading_bubble()
         self.page.update()
         self._scroll_to_bottom()
-        self.user_input.focus()
 
         def get_bot_response_thread():
+
             start_time = time()
             answer = self._bot["instance"].ask(question)
             elapsed = time() - start_time
@@ -358,9 +524,10 @@ class GGUFChatApp:
                     border=ft.border.all(0.3, ft.Colors.OUTLINE),
                 )
                 
-                delete_icon_row = ft.Row(
+                icons_row = ft.Row(
                     [
-                        self._create_delete_icon(new_message_id)
+                        self._create_delete_icon(new_message_id),
+
                     ], 
                     alignment=ft.MainAxisAlignment.END,
                     vertical_alignment=ft.CrossAxisAlignment.END,
@@ -368,7 +535,7 @@ class GGUFChatApp:
 
                 message_stack = ft.Stack(
                     [bubble, ft.Container(
-                        content=delete_icon_row,
+                        content=icons_row,
                         bottom=0,
                         right=0,
                     ),], 
@@ -397,6 +564,14 @@ class GGUFChatApp:
 
             self.user_input.disabled = False
             self.send_btn.disabled = False
+            
+            async def set_focus_async():
+                await asyncio.sleep(0.1)
+                self.user_input.focus()
+                self.page.update()
+
+            asyncio.run_coroutine_threadsafe(set_focus_async(), self.page.loop)
+
             self.page.update()
             self._scroll_to_bottom()
 
@@ -420,6 +595,7 @@ class GGUFChatApp:
             border=ft.border.all(0.3, ft.Colors.OUTLINE),
         )
 
+        edit_icon = self._create_edit_icon(message_id)
         delete_icon = self._create_delete_icon(message_id)
 
         bubble_with_icon = ft.Stack(
@@ -429,7 +605,7 @@ class GGUFChatApp:
                     margin=ft.margin.only(bottom=27),
                 ),
                 ft.Container(
-                    content=ft.Row([delete_icon], spacing=0, alignment=ft.MainAxisAlignment.END),
+                    content=ft.Row([edit_icon, delete_icon], spacing=0, alignment=ft.MainAxisAlignment.END),
                     right=0,
                     bottom=0,
                     
@@ -490,10 +666,13 @@ class GGUFChatApp:
         self.active_loading_row = row
         self.chat_column.controls.append(self.active_loading_row)
 
-    def _add_bot_bubble(self, answer: str, elapsed: float, record_message: bool = True):
+    def _add_bot_bubble(self, answer: str, elapsed: float, message_id: str = None, record_message: bool = True):
         if record_message:
-            message_id = str(uuid.uuid4())
+            if not message_id:
+                message_id = str(uuid.uuid4())
             self.current_chat_messages.append({"id": message_id, "role": "bot", "content": answer})
+        elif not message_id:
+            message_id = str(uuid.uuid4())
 
         content = f"{answer}"
         if elapsed > 0:
@@ -527,7 +706,9 @@ class GGUFChatApp:
                             fit=ft.ImageFit.COVER, 
                             error_content=ft.Icon(ft.Icons.PERSON)
                         ),
-                        width=40, height=40, border_radius=20, 
+                        width=40, 
+                        height=40, 
+                        border_radius=20, 
                         clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
                     ),
                     wrapper
