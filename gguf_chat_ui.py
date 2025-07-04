@@ -82,7 +82,8 @@ class GGUFChatApp:
         )
 
         self.chat_column = ft.Column(
-            expand=True, spacing=10, 
+            expand=True, 
+            spacing=10, 
             scroll=ft.ScrollMode.ALWAYS,
             auto_scroll=False,
         )
@@ -564,7 +565,7 @@ class GGUFChatApp:
 
             self.user_input.disabled = False
             self.send_btn.disabled = False
-            
+
             async def set_focus_async():
                 await asyncio.sleep(0.1)
                 self.user_input.focus()
