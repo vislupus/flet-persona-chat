@@ -139,7 +139,7 @@ class PersonaSelectorComponent:
 
         add_card = ft.Card(
             content=ft.Container(
-                content=ft.Icon(name=ft.Icons.ADD, size=58),
+                content=ft.Icon(name=ft.Icons.PERSON_ADD, size=58),
                 alignment=ft.alignment.center,
                 aspect_ratio=1,
                 on_click=self._show_add_dialog,
