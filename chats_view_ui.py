@@ -142,7 +142,7 @@ class ChatsViewComponent:
                     header=ft.ListTile(
                         title=ft.Text(self._format_date(date), weight=ft.FontWeight.BOLD),
                     ),
-                    bgcolor=ft.Colors.GREY_100,
+                    bgcolor=ft.Colors.BLUE_50,
                     content=ft.Column(controls=chat_items, spacing=5),
                     expanded=True,
                     can_tap_header=True,

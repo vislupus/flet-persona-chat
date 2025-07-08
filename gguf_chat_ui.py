@@ -17,9 +17,9 @@ class GGUFChatApp:
         self.current_persona = persona
         self._bot = {"instance": None}
         self.history_manager = HistoryManager()
+        
         self.current_chat_messages = []
         self.current_chat_id = None
-
         self.editing_message_id = None
         self.active_bot_bubble = None
         self.active_bot_wrapper = None
@@ -155,7 +155,7 @@ class GGUFChatApp:
                 ids_to_remove.add(msg.get('id'))
                 if msg.get('role') == 'user' and (i + 1) < len(self.current_chat_messages):
                     next_msg = self.current_chat_messages[i+1]
-                    if next_msg.get('role') == 'bot':
+                    if next_msg.get('role') == 'model':
                         indices_to_remove.append(i + 1)
                         ids_to_remove.add(next_msg.get('id'))
                 break 
@@ -168,6 +168,7 @@ class GGUFChatApp:
         if self.current_chat_id:
             self.history_manager.update_chat(self.current_chat_id, self.current_chat_messages)
             print(f"Chat {self.current_chat_id} updated after deletion.")
+            # self._bot["instance"].load_history(self.current_chat_messages)
         self.page.update()
     
     def _create_delete_icon(self, message_id):
@@ -335,7 +336,7 @@ class GGUFChatApp:
     
     def start_new_chat(self, persona: dict):
         self.current_persona = persona
-        self._bot["instance"] = None
+        # self._bot["instance"] = None
         self.current_chat_id = None
         self.editing_message_id = None
         self.persona_avatar.content = ft.Image(src=self.current_persona.get("image_path"), fit=ft.ImageFit.COVER, error_content=ft.Icon(ft.Icons.PERSON))
@@ -351,14 +352,19 @@ class GGUFChatApp:
             msg.setdefault('id', str(uuid.uuid4()))
         
         self.current_chat_messages = messages
+
+        if self._bot["instance"] is None:
+            prompt = self.current_persona.get("prompt", "You are a helpful assistant.")
+            self._bot["instance"] = ChatBot(system_prompt=prompt)
+        # self._bot["instance"].load_history(messages)
         
         for message in self.current_chat_messages:
             if message.get("role") == "user":
                 self._add_user_bubble(message.get("content"), message_id=message.get("id"), record_message=False)
-            elif message.get("role") == "bot":
+            elif message.get("role") == "model":
                 self._add_bot_bubble(message.get("content"), elapsed=0, message_id=message.get("id"), record_message=False)
         
-        self._bot["instance"] = None
+        # self._bot["instance"] = None
         self.page.update()
         
     def _on_resize(self, e=None):
@@ -433,7 +439,6 @@ class GGUFChatApp:
                 break
         
         if row_to_update:
-            # Rebuild the bubble to ensure UI update
             new_bubble = ft.Container(
                 content=ft.Markdown(
                     edited_text,
@@ -472,10 +477,8 @@ class GGUFChatApp:
                 margin=ft.margin.only(right=20),
             )
 
-            # Replace the old row's wrapper with the new one
             row_to_update.controls[0] = new_wrapper
             
-            # Remove all subsequent controls from the UI
             self.chat_column.controls = self.chat_column.controls[:self.chat_column.controls.index(row_to_update) + 1]
         
         self._exit_editing_mode()
@@ -489,13 +492,6 @@ class GGUFChatApp:
             prompt = self.current_persona.get("prompt", "You are a helpful assistant.")
             self._bot["instance"] = ChatBot(system_prompt=prompt)
 
-        self._bot["instance"]._history.clear()
-        for msg in self.current_chat_messages[:-1]:
-            if msg['role'] == 'user':
-                self._bot["instance"]._history.add_user_message(msg['content'])
-            elif msg['role'] == 'bot':
-                self._bot["instance"]._history.add_ai_message(msg['content'])
-
         self.user_input.disabled = True
         self.send_btn.disabled = True
         self.cancel_btn.visible = False
@@ -506,11 +502,12 @@ class GGUFChatApp:
         def get_bot_response_thread():
 
             start_time = time()
-            answer = self._bot["instance"].ask(question)
+            history = self.current_chat_messages[:-1]
+            answer = self._bot["instance"].ask(question, history)
             elapsed = time() - start_time
 
             new_message_id = str(uuid.uuid4())
-            self.current_chat_messages.append({"id": new_message_id, "role": "bot", "content": answer})
+            self.current_chat_messages.append({"id": new_message_id, "role": "model", "content": answer})
             
             if self.active_bot_bubble and self.active_bot_wrapper and self.active_loading_row:
                 final_content_md = f"{answer}\n\n*Response time: {elapsed:.2f} s*"
@@ -671,7 +668,7 @@ class GGUFChatApp:
         if record_message:
             if not message_id:
                 message_id = str(uuid.uuid4())
-            self.current_chat_messages.append({"id": message_id, "role": "bot", "content": answer})
+            self.current_chat_messages.append({"id": message_id, "role": "model", "content": answer})
         elif not message_id:
             message_id = str(uuid.uuid4())
 

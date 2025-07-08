@@ -22,11 +22,22 @@ class HistoryManager:
     def load_chats(self) -> list:
         """Loads all saved chat sessions."""
         with open(self.CHATS_FILE, "r", encoding="utf8") as f:
-            return json.load(f)
+            chats = json.load(f)
+
+        for chat in chats:
+            for msg in chat.get('messages', []):
+                if msg['role'] == 'bot':
+                    msg['role'] = 'model'
+        return chats
 
     def save_chat(self, persona_id: str, messages: list, title: str) -> str:
         if not messages:
             return # Don't save empty chats
+        
+        messages = [
+            {"id": msg["id"], "role": "model" if msg["role"] == "bot" else msg["role"], "content": msg["content"]}
+            for msg in messages
+        ]
 
         chats = self.load_chats()
         
@@ -46,6 +57,11 @@ class HistoryManager:
     def update_chat(self, chat_id: str, messages: list):
         if not chat_id: 
             return
+        
+        messages = [
+            {"id": msg["id"], "role": "model" if msg["role"] == "bot" else msg["role"], "content": msg["content"]}
+            for msg in messages
+        ]
         
         chats = self.load_chats()
         chat_found = False
