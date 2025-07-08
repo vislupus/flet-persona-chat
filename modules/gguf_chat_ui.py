@@ -3,8 +3,8 @@ import threading
 from time import time
 import uuid
 import flet as ft
-from chatbot import ChatBot
-from history_manager import HistoryManager
+from modules.chatbot import ChatBot
+from modules.history_manager import HistoryManager
 
 
 class GGUFChatApp:

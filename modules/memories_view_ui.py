@@ -1,6 +1,6 @@
 import flet as ft
-from history_manager import HistoryManager
-from persona_selector_ui import PersonaManager
+from modules.history_manager import HistoryManager
+from modules.persona_selector_ui import PersonaManager
 from datetime import datetime
 
 

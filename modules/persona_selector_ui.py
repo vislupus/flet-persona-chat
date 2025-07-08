@@ -9,8 +9,8 @@ class PersonaManager:
     """Handles data and file operations for personas. (No changes needed here)"""
 
     def __init__(self, file_path="personas.json", assets_dir="assets"):
-        self.file_path = file_path
         self.assets_dir = assets_dir
+        self.file_path = f"{self.assets_dir}/{file_path}"
         os.makedirs(self.assets_dir, exist_ok=True)
         if not os.path.isfile(self.file_path):
             self._save_personas_to_disk([])

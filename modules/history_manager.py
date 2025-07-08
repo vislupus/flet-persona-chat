@@ -4,8 +4,8 @@ from datetime import datetime
 import uuid
 
 class HistoryManager:
-    CHATS_FILE = "saved_chats.json"
-    MEMORIES_FILE = "saved_memories.json"
+    CHATS_FILE = "assets/saved_chats.json"
+    MEMORIES_FILE = "assets/saved_memories.json"
 
     def __init__(self):
         if not os.path.isfile(self.CHATS_FILE):

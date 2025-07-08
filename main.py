@@ -1,10 +1,10 @@
 import flet as ft
-from gguf_chat_ui import GGUFChatApp
-from persona_selector_ui import PersonaSelectorComponent, PersonaManager
-from chats_view_ui import ChatsViewComponent
-from memories_view_ui import MemoriesViewComponent
-from history_manager import HistoryManager
-from person_view_ui import PersonViewComponent
+from modules.gguf_chat_ui import GGUFChatApp
+from modules.persona_selector_ui import PersonaSelectorComponent, PersonaManager
+from modules.chats_view_ui import ChatsViewComponent
+from modules.memories_view_ui import MemoriesViewComponent
+from modules.history_manager import HistoryManager
+from modules.person_view_ui import PersonViewComponent
 
 
 def main(page: ft.Page):

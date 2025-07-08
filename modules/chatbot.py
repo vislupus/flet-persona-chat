@@ -1,5 +1,5 @@
 from llama_cpp import Llama
-from person_view_ui import PersonInfoManager
+from modules.person_view_ui import PersonInfoManager
 
 
 class ChatBot:
@@ -45,8 +45,6 @@ class ChatBot:
 
     def ask(self, user_input: str, history: list) -> str:
 
-        
-
         messages_for_llm = []
 
         if not history:
@@ -54,12 +52,7 @@ class ChatBot:
             messages_for_llm.append({"role": "user", "content": full_user_input})
         else:
             full_user_input = f"{self.system_prompt}\n\nИстория на разговора:\n{history}\n\nВъпрос: {user_input}\n\n\nОтговор:"
-            # messages_for_llm.append({"role": "user", "content": self.system_prompt})
-            # messages_for_llm.extend(history)
-            # messages_for_llm.append({"role": "user", "content": user_input})
             messages_for_llm.append({"role": "user", "content": full_user_input})
-
-        print(history)
 
         response = self.llm.create_chat_completion(
             messages=messages_for_llm,

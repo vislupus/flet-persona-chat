@@ -6,7 +6,7 @@ import uuid
 
 class PersonInfoManager:
     def __init__(self, file_path="person_info.json"):
-        self.file_path = file_path
+        self.file_path = f"assets/{file_path}"
         if not os.path.isfile(self.file_path):
             self._write_json([])
 
